@@ -3,14 +3,12 @@ package org.daiv.coroutines
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.SendChannel
-import kotlinx.coroutines.channels.actor
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 
 interface ActorAnswerable<R> {
-    suspend fun runWithReturn(): R
+    suspend fun run(): R
 }
 
 interface ActorRunnable {
@@ -28,7 +26,7 @@ interface ScopeContextable {
 }
 
 
-class ActorableInterface(scopeContextable: ScopeContextable) : ScopeContextable by scopeContextable {
+class ActorableInterface(scopeContextable: ScopeContextable = DefaultScopeContextable()) : ScopeContextable by scopeContextable {
     interface ActorableEventHandler {
         suspend fun handle()
     }
@@ -46,14 +44,14 @@ class ActorableInterface(scopeContextable: ScopeContextable) : ScopeContextable 
         val answerChannel: Channel<X>
     ) : ActorableEventHandler {
         override suspend fun handle() {
-            answerChannel.send(actorAnswerable.runWithReturn())
+            answerChannel.send(actorAnswerable.run())
         }
     }
 
-
-    private val channel: SendChannel<ActorableEventHandler> = scope.actor(context) {
+    private val channel: Channel<ActorableEventHandler> = Channel()
+    val job = scope.launch(context) {
         while (true) {
-            val e = receive()
+            val e = channel.receive()
             e.handle()
         }
     }
