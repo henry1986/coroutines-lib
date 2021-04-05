@@ -56,6 +56,17 @@ class ActorableInterface(scopeContextable: ScopeContextable = DefaultScopeContex
         }
     }
 
+    inner class HasEventsWaiting:ActorAnswerable<Boolean>{
+        override suspend fun run(): Boolean {
+            return channel.isEmpty
+        }
+
+    }
+
+    suspend fun hasEventsWaiting():Boolean{
+        return receiveAnswer(HasEventsWaiting())
+    }
+
     suspend fun <X> receiveAnswer(t: ActorAnswerable<X>): X {
         val answerChannel = Channel<X>()
         scope.launch(context) {

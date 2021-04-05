@@ -3,6 +3,7 @@ package org.daiv.coroutines
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.receiveOrNull
 import kotlinx.coroutines.launch
 import org.daiv.coroutines.CalculationSuspendableMap.CalculationState
 
@@ -16,10 +17,10 @@ internal data class ValueData<V>(
     val job: Job?,
     val listener: MutableList<Channel<V>>
 ) {
-    fun getValue(channel: Channel<V>): V? {
+    fun getValue(channel: Channel<V>?): V? {
         return when (calculationState) {
             CalculationState.CALCULATING -> {
-                this.listener.add(channel)
+                channel?.let { this.listener.add(it) }
                 null
             }
             CalculationState.DONE -> v ?: throw RuntimeException("if calculationState is done, then v should never be null")
@@ -28,9 +29,9 @@ internal data class ValueData<V>(
 }
 
 
-class CalculationSuspendableMap<K : Any, V : Any> {
-    val contextable = DefaultScopeContextable()
-    val actorableInterface = ActorableInterface(contextable)
+class CalculationSuspendableMap<K : Any, V : Any>(val valueCreation: suspend (K) -> V) {
+    private val contextable = DefaultScopeContextable()
+    private val actorableInterface = ActorableInterface(contextable)
 
     enum class CalculationState {
         CALCULATING, DONE
@@ -41,26 +42,44 @@ class CalculationSuspendableMap<K : Any, V : Any> {
 
     private inner class SetValue(val key: K, val v: V) : ActorRunnable {
         override suspend fun run() {
-            map[key]?.listener?.forEach { it.send(v) }
+            val listener = map[key]?.listener
             map[key] = ValueData(CalculationState.DONE, v, null, mutableListOf())
+            listener?.forEach { it.send(v) }
         }
     }
 
-    internal inner class GetValue(val key: K, val channel: Channel<V>, val block: suspend () -> V) :
-        ActorAnswerable<V?> {
 
-        fun startCalculation(): V? {
+    interface Calculatable<K : Any, V : Any> {
+        val key: K
+        val channel: Channel<V>
+
+        fun startCalculation(): V?
+    }
+
+    inner class StartCalculatable(
+        override val key: K,
+        override val channel: Channel<V>,
+    ) : Calculatable<K, V> {
+
+        private fun valueData(job: Job) =
+            ValueData(CalculationState.CALCULATING, null, job, mutableListOf(channel))
+
+        override fun startCalculation(): V? {
             val job = contextable.scope.launch(contextable.context + CoroutineName("Calculate $key")) {
-                val ret = block()
+                val ret = valueCreation(key)
                 actorableInterface.runEvent(SetValue(key, ret))
             }
-            map[key] = ValueData(CalculationState.CALCULATING, null, job, mutableListOf(channel))
+            map[key] = valueData(job)
             return null
         }
+    }
+
+    internal inner class GetValue(startCalculatable: StartCalculatable) :
+        ActorAnswerable<V?>, Calculatable<K, V> by startCalculatable {
 
         override suspend fun run(): V? {
             return map[key].let {
-                if(it == null){
+                if (it == null) {
                     startCalculation()
                 } else {
                     it.getValue(channel)
@@ -69,15 +88,45 @@ class CalculationSuspendableMap<K : Any, V : Any> {
         }
     }
 
+    internal inner class ExecuteOnNotExistence(startCalculatable: StartCalculatable) :
+        ActorRunnable, Calculatable<K, V> by startCalculatable {
+
+        override suspend fun run() {
+            val res = map[key]
+            when (res) {
+                null -> startCalculation()
+                else -> {
+                    channel.close()
+                }
+            }
+        }
+    }
+
+
     fun tryDirectGet(key: K) = map[key]?.v
 
-    suspend fun getValue(key: K, block: suspend () -> V): V {
+    suspend fun getValue(key: K): V {
         return tryDirectGet(key) ?: run {
             val channel = Channel<V>()
-            actorableInterface.receiveAnswer(GetValue(key, channel, block)) ?: run {
+            actorableInterface.receiveAnswer(GetValue(StartCalculatable(key, channel))) ?: run {
                 channel.receive()
             }
         }
+    }
+
+    fun launch(key: K, afterRes: suspend (V) -> Unit): Job {
+        return contextable.scope.launch(contextable.context) { afterRes(getValue(key)) }
+    }
+
+    fun launchOnNotExistence(key: K, afterRes: suspend (V) -> Unit): Job {
+        val job = contextable.scope.launch(contextable.context + CoroutineName("After Calculation $key")) {
+            tryDirectGet(key) ?: run {
+                val channel = Channel<V>()
+                actorableInterface.runEvent(ExecuteOnNotExistence(StartCalculatable(key, channel)))
+                channel.receiveOrNull()?.let { afterRes(it) }
+            }
+        }
+        return job
     }
 
 //    fun setInsertionResult(key: ClassKey, insertionResult: InsertionResult<*>) {
