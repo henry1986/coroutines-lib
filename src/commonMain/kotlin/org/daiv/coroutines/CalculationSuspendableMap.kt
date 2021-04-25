@@ -1,10 +1,8 @@
 package org.daiv.coroutines
 
-import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.receiveOrNull
-import kotlinx.coroutines.launch
 import org.daiv.coroutines.CalculationSuspendableMap.CalculationState
 
 
@@ -29,9 +27,14 @@ internal data class ValueData<V>(
 }
 
 
-class CalculationSuspendableMap<K : Any, V : Any>(val valueCreation: suspend (K) -> V) {
-    private val contextable = DefaultScopeContextable()
-    private val actorableInterface = ActorableInterface(contextable)
+class CalculationSuspendableMap<K, V : Any>(
+    name:String,
+    private val contextable: ScopeContextable = DefaultScopeContextable(),
+    val valueCreation: suspend (K) -> V
+) {
+
+    private val actorableInterface = ActorableInterface("$name -> suspendableMap",Channel.RENDEZVOUS,contextable)
+    private val jobMap = JobMap("CalculationSuspendableMap", contextable)
 
     enum class CalculationState {
         CALCULATING, DONE
@@ -46,10 +49,12 @@ class CalculationSuspendableMap<K : Any, V : Any>(val valueCreation: suspend (K)
             map[key] = ValueData(CalculationState.DONE, v, null, mutableListOf())
             listener?.forEach { it.send(v) }
         }
+
+        override fun toString() = "setValue $key, $v"
     }
 
 
-    interface Calculatable<K : Any, V : Any> {
+    interface Calculatable<K, V : Any> {
         val key: K
         val channel: Channel<V>
 
@@ -72,9 +77,11 @@ class CalculationSuspendableMap<K : Any, V : Any>(val valueCreation: suspend (K)
             map[key] = valueData(job)
             return null
         }
+
+        override fun toString() = "startCalculation: $key"
     }
 
-    internal inner class GetValue(startCalculatable: StartCalculatable) :
+    internal inner class GetValue(private val startCalculatable: StartCalculatable) :
         ActorAnswerable<V?>, Calculatable<K, V> by startCalculatable {
 
         override suspend fun run(): V? {
@@ -86,20 +93,26 @@ class CalculationSuspendableMap<K : Any, V : Any>(val valueCreation: suspend (K)
                 }
             }
         }
+
+        override fun toString() = startCalculatable.toString()
     }
 
-    internal inner class ExecuteOnNotExistence(startCalculatable: StartCalculatable) :
+    internal inner class ExecuteOnNotExistence(private val startCalculatable: StartCalculatable) :
         ActorRunnable, Calculatable<K, V> by startCalculatable {
 
         override suspend fun run() {
             val res = map[key]
             when (res) {
-                null -> startCalculation()
+                null -> {
+                    startCalculation()
+                }
                 else -> {
                     channel.close()
                 }
             }
         }
+
+        override fun toString() = startCalculatable.toString()
     }
 
 
@@ -114,18 +127,34 @@ class CalculationSuspendableMap<K : Any, V : Any>(val valueCreation: suspend (K)
         }
     }
 
+    /**
+     * launches a coroutine to get the value [V] for [K] and stores the result. [afterRes] is called, after the calculation
+     * is done.
+     * If there is already a result [V] for [K], there is no calculation, but [afterRes] is called nonetheless
+     */
     fun launch(key: K, afterRes: suspend (V) -> Unit): Job {
-        return contextable.scope.launch(contextable.context) { afterRes(getValue(key)) }
+        val job = contextable.launch("launch $key") { afterRes(getValue(key)) }
+        jobMap.offerNextJob(job)
+        return job
     }
 
+    /**
+     * launches a coroutine to get the value [V] for [key] and stores the result. [afterRes] is called, after the calculation
+     * is done.
+     * If there is already a result [V] for [K], there is no calculation, and [afterRes] is NOT called
+     */
     fun launchOnNotExistence(key: K, afterRes: suspend (V) -> Unit): Job {
-        val job = contextable.scope.launch(contextable.context + CoroutineName("After Calculation $key")) {
+        val job = contextable.launch("launchOnNotExistence $key") {
             tryDirectGet(key) ?: run {
+                println("run $key")
                 val channel = Channel<V>()
                 actorableInterface.runEvent(ExecuteOnNotExistence(StartCalculatable(key, channel)))
-                channel.receiveOrNull()?.let { afterRes(it) }
+                channel.receiveOrNull()?.let {
+                    afterRes(it)
+                }
             }
         }
+        jobMap.offerNextJob(job)
         return job
     }
 
@@ -133,5 +162,72 @@ class CalculationSuspendableMap<K : Any, V : Any>(val valueCreation: suspend (K)
 //        map[key] = InsertionData(InsertionState.DONE, insertionResult)
 //    }
 
-    fun all() = map.values.map { it.v }
+    suspend fun join() {
+        jobMap.join()
+    }
+
+    suspend fun all(): List<V> {
+        join()
+        return map.values.map { it.v!! }
+    }
+
+    suspend fun map(): Map<K, V> {
+        join()
+        return map.map { it.key to it.value.v!! }.toMap()
+    }
 }
+
+class CalculationCollection<K, CK, V : Any>(val name:String, val scopeContextable: ScopeContextable = DefaultScopeContextable()) {
+    private val actor = ActorableInterface("$name -> calculationCollection",Channel.RENDEZVOUS,scopeContextable)
+    private val map = mutableMapOf<K, CalculationSuspendableMap<out CK, V>>()
+
+    private inner class Insert<T : CK>(
+        val o: T,
+        val k: K,
+        val valueCreation: suspend (T) -> V,
+        val afterRes: suspend (V) -> Unit
+    ) :
+        ActorAnswerable<Job> {
+        override suspend fun run(): Job {
+            val x = tryDirectGet(k) ?: run {
+                val calc = CalculationSuspendableMap(name, scopeContextable, valueCreation)
+                map[k] = calc
+                calc
+            }
+            x as CalculationSuspendableMap<CK, V>
+            return x.launch(o, afterRes)
+        }
+
+        override fun toString() = "insert $o for $k"
+    }
+
+    private fun tryDirectGet(k: K): CalculationSuspendableMap<*, V>? {
+        return map[k]
+    }
+
+    suspend fun <T : CK> insert(
+        o: T,
+        key: K,
+        valueCreation: suspend (T) -> V,
+        afterRes: suspend (V) -> Unit = {}
+    ): Job {
+        val calc = tryDirectGet(key)
+        return if (calc == null) {
+            actor.receiveAnswer(Insert(o, key, valueCreation, afterRes))
+        } else {
+            calc as CalculationSuspendableMap<T, V>
+            calc.launch(o, afterRes)
+        }
+    }
+
+    suspend fun join() {
+        actor.waitOnDone {
+            map.values.forEach { it.join() }
+        }
+    }
+
+    fun all() = map.values.toList()
+}
+
+
+

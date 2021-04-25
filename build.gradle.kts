@@ -6,7 +6,7 @@ buildscript {
         maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
     }
     dependencies {
-        classpath("org.daiv.dependency:DependencyHandling:0.0.124")
+        classpath("org.daiv.dependency:DependencyHandling:0.0.137")
     }
 }
 
@@ -24,6 +24,7 @@ version = versions.setVersion { coroutinesLib }
 
 repositories {
     mavenCentral()
+    maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
 }
 
 kotlin {
@@ -47,17 +48,18 @@ kotlin {
     }
     val hostOs = System.getProperty("os.name")
     val isMingwX64 = hostOs.startsWith("Windows")
-    val nativeTarget = when {
-        hostOs == "Mac OS X" -> macosX64("native")
-        hostOs == "Linux" -> linuxX64("native")
-        isMingwX64 -> mingwX64("native")
-        else -> throw GradleException("Host OS is not supported in Kotlin/Native.")
-    }
+//    val nativeTarget = when {
+//        hostOs == "Mac OS X" -> macosX64("native")
+//        hostOs == "Linux" -> linuxX64("native")
+//        isMingwX64 -> mingwX64("native")
+//        else -> throw GradleException("Host OS is not supported in Kotlin/Native.")
+//    }
 
     
     sourceSets {
         val commonMain by getting{
             dependencies{
+                implementation(versions.kutil())
                 implementation(versions.coroutines())
             }
         }
@@ -79,8 +81,8 @@ kotlin {
                 implementation(kotlin("test-js"))
             }
         }
-        val nativeMain by getting
-        val nativeTest by getting
+//        val nativeMain by getting
+//        val nativeTest by getting
     }
 }
 artifactory {

@@ -1,0 +1,40 @@
+<!--
+  ~ Copyright (c) 2018. Martin Heinrich
+  ~ This source code is property of the EA GmbH.
+  -->
+
+<configuration>
+    <!-- STDOUT APPENDER -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{60} - %msg%n</pattern>
+<!--            <pattern> - %msg%n</pattern>-->
+        </encoder>
+    </appender>
+    <!-- FILE APPENDER -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/cos.log</file>
+
+        <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
+            <fileNamePattern>logs/cos.%i.log.zip</fileNamePattern>
+            <minIndex>1</minIndex>
+            <maxIndex>4</maxIndex>
+        </rollingPolicy>
+        <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
+            <maxFileSize>1MB</maxFileSize>
+        </triggeringPolicy>
+        <encoder>
+            <pattern>%d{dd.MM.yyyy;HH:mm:ss.SSS};[%thread];%-5level;%logger{60};%msg%n</pattern>
+        </encoder>
+    </appender>
+    <!-- switch the log level between error and trace -> with error, much fewer log messages will appear-->
+    <logger name="org.daiv.websocket.ControlledChannelImpl" level="DEBUG"/>
+    <logger name="org.quartz.core.QuartzSchedulerThread" level="WARN"/>
+    <logger name="org.daiv.reflection.persister.Persister" level="OFF"/>
+
+    <root level="TRACE">
+        <appender-ref ref="STDOUT" />
+        <appender-ref ref="FILE"/>
+    </root>
+
+</configuration>
