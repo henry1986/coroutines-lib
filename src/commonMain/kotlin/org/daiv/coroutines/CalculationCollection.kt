@@ -21,7 +21,9 @@ class CalculationCollection<K, CK, V : Any>(val name: String, val scopeContextab
         override suspend fun run(): Job {
             val x = tryDirectGet(k) ?: run {
                 val calc = CalculationSuspendableMap(name, scopeContextable, valueCreation)
+                logger.trace { "add $k to map" }
                 map[k] = calc
+                logger.trace { "added $k to map" }
                 calc
             }
             x as CalculationSuspendableMap<CK, V>
@@ -50,11 +52,14 @@ class CalculationCollection<K, CK, V : Any>(val name: String, val scopeContextab
         }
     }
 
-    suspend fun join() {
+    tailrec suspend fun join() {
         val filter = map.filter { !it.value.isEmpty() }
-        if(filter.isNotEmpty()){
+        if (filter.isNotEmpty()) {
             logger.trace { "to join, we have at least to wait for ${filter.map { it.key }}" }
-            map.values.forEach { it.join() }
+            filter.forEach {
+                logger.trace { "join $it" }
+                it.value.join()
+            }
             join()
         }
     }
