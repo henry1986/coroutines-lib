@@ -29,7 +29,9 @@ class CalculationCollectionTest {
             println("after 2")
             calledAfterCalc2.callDone()
         }
+        println("join")
         c.join()
+        println("joined")
         assertTrue(calledAfterCalc.called)
         assertTrue(calledCalc.called != calledCalc2.called)
         assertTrue(calledAfterCalc2.called)

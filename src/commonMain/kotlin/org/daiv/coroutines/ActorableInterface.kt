@@ -63,6 +63,7 @@ class ActorableInterface(name:String, val channelCapacity: Int = Channel.RENDEZV
             val e = channel.receive()
             logger.trace { "handle: $e" }
             e.handle()
+            logger.trace { "handled: $e" }
         }
     }
 
@@ -114,5 +115,9 @@ class ActorableInterface(name:String, val channelCapacity: Int = Channel.RENDEZV
         scope.launch(context + CoroutineName("$t")) {
             channel.send(RunEvent(t))
         }
+    }
+
+    override fun toString(): String {
+        return job.toString()
     }
 }

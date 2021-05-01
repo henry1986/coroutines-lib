@@ -28,13 +28,13 @@ internal data class ValueData<V>(
 
 
 class CalculationSuspendableMap<K, V : Any>(
-    name:String,
+    name: String,
     private val contextable: ScopeContextable = DefaultScopeContextable(),
     val valueCreation: suspend (K) -> V
-) {
+) :Joinable{
 
-    private val actorableInterface = ActorableInterface("$name -> suspendableMap",Channel.RENDEZVOUS,contextable)
-    private val jobMap = JobMap("CalculationSuspendableMap", contextable)
+    private val actorableInterface = ActorableInterface("$name -> suspendableMap", Channel.RENDEZVOUS, contextable)
+    private val jobMap = JoinSet("CalculationSuspendableMap", contextable)
 
     enum class CalculationState {
         CALCULATING, DONE
@@ -162,9 +162,11 @@ class CalculationSuspendableMap<K, V : Any>(
 //        map[key] = InsertionData(InsertionState.DONE, insertionResult)
 //    }
 
-    suspend fun join() {
+    override suspend fun join() {
         jobMap.join()
     }
+
+    suspend fun isEmpty() = jobMap.isEmpty()
 
     suspend fun all(): List<V> {
         join()
@@ -177,57 +179,6 @@ class CalculationSuspendableMap<K, V : Any>(
     }
 }
 
-class CalculationCollection<K, CK, V : Any>(val name:String, val scopeContextable: ScopeContextable = DefaultScopeContextable()) {
-    private val actor = ActorableInterface("$name -> calculationCollection",Channel.RENDEZVOUS,scopeContextable)
-    private val map = mutableMapOf<K, CalculationSuspendableMap<out CK, V>>()
-
-    private inner class Insert<T : CK>(
-        val o: T,
-        val k: K,
-        val valueCreation: suspend (T) -> V,
-        val afterRes: suspend (V) -> Unit
-    ) :
-        ActorAnswerable<Job> {
-        override suspend fun run(): Job {
-            val x = tryDirectGet(k) ?: run {
-                val calc = CalculationSuspendableMap(name, scopeContextable, valueCreation)
-                map[k] = calc
-                calc
-            }
-            x as CalculationSuspendableMap<CK, V>
-            return x.launch(o, afterRes)
-        }
-
-        override fun toString() = "insert $o for $k"
-    }
-
-    private fun tryDirectGet(k: K): CalculationSuspendableMap<*, V>? {
-        return map[k]
-    }
-
-    suspend fun <T : CK> insert(
-        o: T,
-        key: K,
-        valueCreation: suspend (T) -> V,
-        afterRes: suspend (V) -> Unit = {}
-    ): Job {
-        val calc = tryDirectGet(key)
-        return if (calc == null) {
-            actor.receiveAnswer(Insert(o, key, valueCreation, afterRes))
-        } else {
-            calc as CalculationSuspendableMap<T, V>
-            calc.launch(o, afterRes)
-        }
-    }
-
-    suspend fun join() {
-        actor.waitOnDone {
-            map.values.forEach { it.join() }
-        }
-    }
-
-    fun all() = map.values.toList()
-}
 
 
 

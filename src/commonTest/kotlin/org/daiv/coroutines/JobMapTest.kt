@@ -1,7 +1,6 @@
 package org.daiv.coroutines
 
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,7 +14,8 @@ class JobMapTest {
     private class Counter {
         val scope = DefaultScopeContextable()
         val list = mutableSetOf<Int>()
-        val jobMap = JobMap("test", scope)
+        val jobMap = JoinSet("test", scope)
+
         suspend fun launch(i: Int, delay: Long, block: suspend () -> Unit = {}) = jobMap.nextJob(scope.launch("job i: $i") {
             logger.trace { "before delay $i" }
             delay(delay)
@@ -82,7 +82,7 @@ class JobMapTest {
     fun testNextJob() = runTest {
         val scope = DefaultScopeContextable()
         val called = CalculationSuspendableMapTest.Called()
-        val jobMap = JobMap("", scope)
+        val jobMap = JoinSet("", scope)
         jobMap.nextJob(scope.launch("testLaunch") {
             val l = scope.launch("") {
                 delay(100)
@@ -92,6 +92,12 @@ class JobMapTest {
         })
         jobMap.join()
         assertTrue(called.called)
+    }
+
+    @Test
+    fun testEmptyJoinTask() = runTest{
+        val joinSet = JoinSet("test", DefaultScopeContextable())
+        joinSet.join()
     }
 
 
