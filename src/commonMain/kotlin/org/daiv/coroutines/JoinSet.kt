@@ -21,7 +21,7 @@ class JoinSet(val name: String, private val scopeContextable: ScopeContextable) 
 
     val logger = KotlinLogging.logger("org.daiv.coroutines.JobMap - $name")
 
-    private val actor = ActorableInterface(name, Channel.UNLIMITED, scopeContextable)
+    private val actor = ActorableInterface(name, channelCapacity = Channel.UNLIMITED, scopeContextable = scopeContextable)
     private val map = mutableSetOf<Joinable>()
 
     private inner class AddJob(val job: Joinable) : ActorRunnable {
@@ -60,12 +60,14 @@ class JoinSet(val name: String, private val scopeContextable: ScopeContextable) 
             joinTask?.let {
                 it.register(channel)
             } ?: run {
+                logger.trace { "no joinTask exists" }
                 if(map.isNotEmpty()) {
                     val newJoinTask = JoinTask()
                     this@JoinSet.joinTask = newJoinTask
                     newJoinTask.register(channel)
                     actor.runEvent(newJoinTask)
                 }else{
+                    logger.trace { "nothing to do" }
                     channel.send(Unit)
                 }
             }
