@@ -3,10 +3,11 @@ import org.daiv.dependency.Versions
 buildscript {
     repositories {
         maven { url = uri("https://repo.gradle.org/gradle/libs-releases") }
-        maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
+        maven { url = uri("https://artifactory.daiv.org/artifactory/gradle-dev-local") }
+//        maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
     }
     dependencies {
-        classpath("org.daiv.dependency:DependencyHandling:0.0.143")
+        classpath("org.daiv.dependency:DependencyHandling:0.0.155")
     }
 }
 
