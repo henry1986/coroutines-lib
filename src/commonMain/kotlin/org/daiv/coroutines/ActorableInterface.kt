@@ -3,6 +3,7 @@ package org.daiv.coroutines
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.receiveOrNull
+import mu.KLogger
 import mu.KotlinLogging
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
@@ -24,16 +25,22 @@ interface ScopeContextable {
     val scope: CoroutineScope
     val context: CoroutineContext
 
-    fun launch(name:String, block: suspend CoroutineScope.() -> Unit) = scope.launch(context + CoroutineName("$name"), block = block)
+    fun launch(name: String, block: suspend CoroutineScope.() -> Unit) = scope.launch(context + CoroutineName("$name"), block = block)
 }
 
 
-class ActorableInterface(name:String, val channelCapacity: Int = Channel.RENDEZVOUS, scopeContextable: ScopeContextable = DefaultScopeContextable()) : ScopeContextable by scopeContextable {
+class ActorableInterface(
+    name: String,
+    val logger:KLogger = Companion.logger,
+    val channelCapacity: Int = Channel.RENDEZVOUS,
+    scopeContextable: ScopeContextable = DefaultScopeContextable()
+) : ScopeContextable by scopeContextable {
     companion object {
         private val logger = KotlinLogging.logger("org.daiv.coroutines.ActorableInterface")
     }
 
     internal val channel: Channel<ActorableEventHandler> = Channel(channelCapacity)
+
     interface ActorableEventHandler {
         suspend fun handle()
     }
@@ -55,10 +62,11 @@ class ActorableInterface(name:String, val channelCapacity: Int = Channel.RENDEZV
         override suspend fun handle() {
             answerChannel.send(actorAnswerable.run())
         }
+
         override fun toString() = actorAnswerable.toString()
     }
 
-    val job = scopeContextable.launch("$name -> ChannelReceiveCoroutine"){
+    val job = scopeContextable.launch("$name -> ChannelReceiveCoroutine") {
         while (true) {
             val e = channel.receive()
             logger.trace { "handle: $e" }
@@ -79,7 +87,7 @@ class ActorableInterface(name:String, val channelCapacity: Int = Channel.RENDEZV
     private inner class CheckDone(val check: suspend () -> Unit) : ActorAnswerable<Boolean> {
         override suspend fun run(): Boolean {
             check()
-            val empty =  channel.isEmpty
+            val empty = channel.isEmpty
             logger.trace { "isEmpty: $empty" }
             return empty
         }
@@ -95,25 +103,41 @@ class ActorableInterface(name:String, val channelCapacity: Int = Channel.RENDEZV
         }
     }
 
+    /**
+     * handles the event [t], if the channel is not full, suspends otherwise
+     */
     suspend fun <X> receiveAnswer(t: ActorAnswerable<X>): X {
         val answerChannel = Channel<X>()
-        scope.launch {
-            channel.send(RunOnAnswerableEvent(t, answerChannel))
-        }
+        logger.trace { "try to send $t" }
+        channel.send(RunOnAnswerableEvent(t, answerChannel))
+        logger.trace { "sent $t" }
         return answerChannel.receive()
     }
 
-    suspend fun suspendRunEvent(t: ActorRunnable){
+    /**
+     * handles the event [t], if the channel is not full, suspends otherwise
+     */
+    suspend fun suspendRunEvent(t: ActorRunnable) {
+        logger.trace { "try to send $t" }
         channel.send(RunEvent(t))
+        logger.trace { "sent $t" }
     }
 
+    /**
+     * returns true, if event was handled, false if it was ignored
+     */
     fun offerRunEvent(t: ActorRunnable): Boolean {
         return channel.offer(RunEvent(t))
     }
 
-    fun runEvent(t: ActorRunnable) {
-        scope.launch(context + CoroutineName("$t")) {
+    /**
+     * starts a coroutine to send the event [t],
+     */
+    fun runEvent(t: ActorRunnable): Job {
+        return scope.launch(context + CoroutineName("$t")) {
+            logger.trace { "sendEvent: $t" }
             channel.send(RunEvent(t))
+            logger.trace { "sent event: $t" }
         }
     }
 

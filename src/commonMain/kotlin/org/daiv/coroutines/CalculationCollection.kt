@@ -5,7 +5,7 @@ import kotlinx.coroutines.channels.Channel
 import mu.KotlinLogging
 
 class CalculationCollection<K, CK, V : Any>(val name: String, val scopeContextable: ScopeContextable = DefaultScopeContextable()) {
-    private val actor = ActorableInterface("$name -> calculationCollection", Channel.RENDEZVOUS, scopeContextable)
+    private val actor = ActorableInterface("$name -> calculationCollection", channelCapacity = Channel.RENDEZVOUS, scopeContextable = scopeContextable)
     private val map = mutableMapOf<K, CalculationSuspendableMap<out CK, V>>()
 
     companion object {

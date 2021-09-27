@@ -33,7 +33,7 @@ class CalculationSuspendableMap<K, V : Any>(
     val valueCreation: suspend (K) -> V
 ) :Joinable{
 
-    private val actorableInterface = ActorableInterface("$name -> suspendableMap", Channel.RENDEZVOUS, contextable)
+    private val actorableInterface = ActorableInterface("$name -> suspendableMap", channelCapacity= Channel.RENDEZVOUS, scopeContextable = contextable)
     private val jobMap = JoinSet("CalculationSuspendableMap", contextable)
 
     enum class CalculationState {
