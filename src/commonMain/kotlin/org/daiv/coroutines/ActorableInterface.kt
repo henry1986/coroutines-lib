@@ -31,7 +31,7 @@ interface ScopeContextable {
 
 class ActorableInterface(
     name: String,
-    val logger:KLogger = Companion.logger,
+    val logger: KLogger = Companion.logger,
     val channelCapacity: Int = Channel.RENDEZVOUS,
     scopeContextable: ScopeContextable = DefaultScopeContextable()
 ) : ScopeContextable by scopeContextable {
@@ -70,7 +70,11 @@ class ActorableInterface(
         while (true) {
             val e = channel.receive()
             logger.trace { "handle: $e" }
-            e.handle()
+            try {
+                e.handle()
+            } catch (t:Throwable){
+                logger.error(t) { "error at handling $e" }
+            }
             logger.trace { "handled: $e" }
         }
     }
@@ -82,7 +86,7 @@ class ActorableInterface(
     }
 
     /**
-     * executes checks and tests, if the receiving channel is emty.
+     * executes checks and tests, if the receiving channel is empty.
      */
     private inner class CheckDone(val check: suspend () -> Unit) : ActorAnswerable<Boolean> {
         override suspend fun run(): Boolean {
