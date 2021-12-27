@@ -2,6 +2,8 @@ package org.daiv.coroutines
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ClosedSendChannelException
+import kotlinx.coroutines.channels.onClosed
 import kotlinx.coroutines.channels.receiveOrNull
 import mu.KLogger
 import mu.KotlinLogging
@@ -131,7 +133,9 @@ class ActorableInterface(
      * returns true, if event was handled, false if it was ignored
      */
     fun offerRunEvent(t: ActorRunnable): Boolean {
-        return channel.offer(RunEvent(t))
+        return channel.trySend(RunEvent(t))
+            .onClosed { throw it ?: ClosedSendChannelException("Channel was closed normally") }
+            .isSuccess
     }
 
     /**

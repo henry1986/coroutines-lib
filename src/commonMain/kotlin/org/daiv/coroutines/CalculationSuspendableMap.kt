@@ -149,7 +149,7 @@ class CalculationSuspendableMap<K, V : Any>(
                 println("run $key")
                 val channel = Channel<V>()
                 actorableInterface.runEvent(ExecuteOnNotExistence(StartCalculatable(key, channel)))
-                channel.receiveOrNull()?.let {
+                channel.receiveCatching().getOrNull()?.let {
                     afterRes(it)
                 }
             }
