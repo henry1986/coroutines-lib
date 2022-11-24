@@ -27,7 +27,8 @@ interface ScopeContextable {
     val scope: CoroutineScope
     val context: CoroutineContext
 
-    fun launch(name: String, block: suspend CoroutineScope.() -> Unit) = scope.launch(context + CoroutineName("$name"), block = block)
+    fun launch(name: String, block: suspend CoroutineScope.() -> Unit) =
+        scope.launch(context + CoroutineName("$name"), block = block)
 }
 
 
@@ -57,6 +58,16 @@ class ActorableInterface(
         override fun toString() = actorRunnable.toString()
     }
 
+    private class RunEventBlock(
+        val actorRunnable: suspend () -> Unit
+    ) : ActorableEventHandler {
+        override suspend fun handle() {
+            actorRunnable()
+        }
+
+        override fun toString() = actorRunnable.toString()
+    }
+
     data class RunOnAnswerableEvent<X>(
         val actorAnswerable: ActorAnswerable<X>,
         val answerChannel: Channel<X>
@@ -68,13 +79,24 @@ class ActorableInterface(
         override fun toString() = actorAnswerable.toString()
     }
 
+    data class RunOnAnswerableEventBlock<X>(
+        val actorAnswerable: suspend () -> X,
+        val answerChannel: Channel<X>
+    ) : ActorableEventHandler {
+        override suspend fun handle() {
+            answerChannel.send(actorAnswerable())
+        }
+
+        override fun toString() = actorAnswerable.toString()
+    }
+
     val job = scopeContextable.launch("$name -> ChannelReceiveCoroutine") {
         while (true) {
             val e = channel.receive()
             logger.trace { "handle: $e" }
             try {
                 e.handle()
-            } catch (t:Throwable){
+            } catch (t: Throwable) {
                 logger.error(t) { "error at handling $e" }
             }
             logger.trace { "handled: $e" }
@@ -123,9 +145,29 @@ class ActorableInterface(
     /**
      * handles the event [t], if the channel is not full, suspends otherwise
      */
+    suspend fun <X> receiveAnswer(t: suspend () -> X): X {
+        val answerChannel = Channel<X>()
+        logger.trace { "try to send $t" }
+        channel.send(RunOnAnswerableEventBlock(t, answerChannel))
+        logger.trace { "sent $t" }
+        return answerChannel.receive()
+    }
+
+    /**
+     * handles the event [t], if the channel is not full, suspends otherwise
+     */
     suspend fun suspendRunEvent(t: ActorRunnable) {
         logger.trace { "try to send $t" }
         channel.send(RunEvent(t))
+        logger.trace { "sent $t" }
+    }
+
+    /**
+     * handles the event [t], if the channel is not full, suspends otherwise
+     */
+    suspend fun suspendRunEvent(t: suspend () -> Unit) {
+        logger.trace { "try to send $t" }
+        channel.send(RunEventBlock(t))
         logger.trace { "sent $t" }
     }
 
@@ -146,6 +188,17 @@ class ActorableInterface(
             logger.trace { "sendEvent: $t" }
             channel.send(RunEvent(t))
             logger.trace { "sent event: $t" }
+        }
+    }
+
+    /**
+     * starts a coroutine and executes [func]
+     */
+    fun runEvent(func: suspend () -> Unit): Job {
+        return scope.launch(context + CoroutineName("$func")) {
+            logger.trace { "sendEvent: $func" }
+            channel.send(RunEventBlock(func))
+            logger.trace { "sent event: $func" }
         }
     }
 
