@@ -1,6 +1,5 @@
 package org.daiv.coroutines
 
-import kotlinx.coroutines.delay
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -9,9 +8,9 @@ class DataActorTest {
     @Test
     fun test() = runTest{
         val myDataActor = DataActor(StateX(9, "Hello"))
-        myDataActor.new { copy(5) }.join()
+        myDataActor.change { copy(5) }.join()
         assertEquals(myDataActor.getData(), StateX(5, "Hello"))
-        myDataActor.new { copy(s = "World") }.join()
+        myDataActor.change { copy(s = "World") }.join()
         assertEquals( StateX(5, "World"), myDataActor.getData())
     }
 }
