@@ -6,14 +6,13 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("org.daiv.dependency:DependencyHandling:0.1.41")
+        classpath("org.daiv.dependency:DependencyHandling:0.1.47")
     }
 }
 
 
 plugins {
     kotlin("multiplatform") version "1.6.10"
-    id("com.jfrog.artifactory") version "4.17.2"
     id("org.daiv.dependency.VersionsPlugin") version "0.1.4"
     id("signing")
     `maven-publish`
@@ -25,7 +24,6 @@ version = versions.setVersion { coroutinesLib }
 
 repositories {
     mavenCentral()
-    maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
 }
 
 kotlin {
