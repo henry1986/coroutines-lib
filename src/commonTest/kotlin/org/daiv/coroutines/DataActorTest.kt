@@ -22,7 +22,7 @@ class DataActorTest {
     @Test
     fun testDelay() = runTest {
         val timeGetter = object : TimeGetter {
-            override suspend fun currentTime(): Long {
+            override fun currentTime(): Long {
                 return 500L
             }
         }
@@ -55,7 +55,7 @@ class DataActorTest {
     fun testTimeActor() = runTest {
         val suspendChannel = Channel<Any>()
         val timeGetter = object : TimeGetter {
-            override suspend fun currentTime(): Long {
+            override fun currentTime(): Long {
                 return 500L
             }
         }
@@ -81,7 +81,7 @@ class DataActorTest {
     fun testTimeAbort() = runTest {
         val suspendChannel = Channel<Any>()
         val timeGetter = object : TimeGetter {
-            override suspend fun currentTime(): Long {
+            override fun currentTime(): Long {
                 return 500L
             }
         }

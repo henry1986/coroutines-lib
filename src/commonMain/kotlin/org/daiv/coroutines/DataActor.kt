@@ -13,8 +13,8 @@ interface TimeTriggerable<T : TimeTriggerable<T>> {
 }
 
 interface TimeGetter {
-    suspend fun currentTime(): Long
-    suspend fun getDelayTime(nextTime: Long, timerable: String): Long? {
+    fun currentTime(): Long
+    fun getDelayTime(nextTime: Long, timerable: String): Long? {
         val current = currentTime()
         val delayTime = nextTime - current
         if (delayTime < 0) {
