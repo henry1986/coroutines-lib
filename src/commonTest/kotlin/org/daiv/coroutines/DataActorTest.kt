@@ -1,11 +1,10 @@
 package org.daiv.coroutines
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.delay
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 class DataActorTest {
     data class StateX(val x: Int, val s: String)
@@ -48,6 +47,21 @@ class DataActorTest {
     private fun check1(timeHandler: TimeHandler<StateTime>, t: StateTime) {
         assertTrue(timeHandler.hasJob())
         assertEquals(StateTime(520, 0), t)
+    }
+
+    @Test
+    fun testClose() = runTest {
+        val myDataActor = DataActor(StateX(9, "Hello"))
+        myDataActor.suspendChange { copy(5) }
+        myDataActor.stop()
+        try {
+            myDataActor.suspendChange { copy(6) }
+            myDataActor.suspendChange { copy(7) }
+            fail("exception should be thrown")
+        } catch (t: CancellationException) {
+            assertEquals(myDataActor.plainData(), StateX(5, "Hello"))
+            return@runTest
+        }
     }
 
 

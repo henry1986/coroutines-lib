@@ -18,6 +18,10 @@ interface ActorRunnable {
     suspend fun run()
 }
 
+interface Closeable{
+    suspend fun stop()
+}
+
 data class DefaultScopeContextable(
     override val scope: CoroutineScope = GlobalScope,
     override val context: CoroutineContext = EmptyCoroutineContext
@@ -37,15 +41,27 @@ class ActorableInterface(
     val logger: KLogger = Companion.logger,
     val channelCapacity: Int = Channel.RENDEZVOUS,
     scopeContextable: ScopeContextable = DefaultScopeContextable()
-) : ScopeContextable by scopeContextable {
+) : ScopeContextable by scopeContextable, Closeable {
     companion object {
         private val logger = KotlinLogging.logger("org.daiv.coroutines.ActorableInterface")
+    }
+
+    override suspend fun stop() {
+        channel.send(StopEventHandler())
     }
 
     internal val channel: Channel<ActorableEventHandler> = Channel(channelCapacity)
 
     interface ActorableEventHandler {
         suspend fun handle()
+    }
+
+    private var open = true
+
+    private inner class StopEventHandler:ActorableEventHandler{
+        override suspend fun handle() {
+            open = false
+        }
     }
 
     private class RunEvent(
@@ -91,7 +107,7 @@ class ActorableInterface(
     }
 
     val job = scopeContextable.launch("$name -> ChannelReceiveCoroutine") {
-        while (true) {
+        while (open) {
             val e = channel.receive()
             logger.trace { "handle: $e" }
             try {
@@ -100,7 +116,12 @@ class ActorableInterface(
                 logger.error(t) { "error at handling $e" }
             }
             logger.trace { "handled: $e" }
+            if(!open){
+                logger.trace { "close actor $name" }
+                channel.cancel()
+            }
         }
+        logger.trace { "finished actor: $name" }
     }
 
     private inner class HasEventsWaiting() : ActorAnswerable<Boolean> {

@@ -12,7 +12,7 @@ interface TimeTriggerable<T : TimeTriggerable<T>> {
     fun isToCall(): Boolean = true
 }
 
-interface TimeGetter {
+fun interface TimeGetter {
     fun currentTime(): Long
     fun getDelayTime(nextTime: Long, timerable: String): Long? {
         val current = currentTime()
@@ -107,7 +107,7 @@ class DataActor<T : Any>(
     t: T,
     val afterChange: AfterChange<T> = AfterChange.noChange(),
     val actor: ActorableInterface = ActorableInterface(t.toString())
-) : CActor<T> {
+) : CActor<T>, Closeable by actor {
     private val dataHolder: DataHolder<T> = DataHolder(t)
     private val afterChangeCom = object : AfterChangeCom<T> {
         override fun name(): String {
