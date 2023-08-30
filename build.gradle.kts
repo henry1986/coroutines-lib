@@ -6,7 +6,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("org.daiv.dependency:DependencyHandling:0.1.57")
+        classpath("org.daiv.dependency:DependencyHandling:0.1.61")
     }
 }
 
@@ -21,7 +21,7 @@ plugins {
 val versions = org.daiv.dependency.DefaultDependencyBuilder(Versions.current())
 group = "org.daiv.coroutines"
 version = versions.setVersion { coroutinesLib }
-//version = "0.1.8-local"
+//version = "0.1.11-local"
 
 repositories {
     mavenCentral()

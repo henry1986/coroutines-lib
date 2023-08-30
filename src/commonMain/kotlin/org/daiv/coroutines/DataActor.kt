@@ -106,6 +106,7 @@ interface AfterChange<T : Any> {
 class DataActor<T : Any>(
     t: T,
     val afterChange: AfterChange<T> = AfterChange.noChange(),
+    val onEveryChange:((T)->Unit)? = null,
     val actor: ActorableInterface = ActorableInterface(t.toString())
 ) : CActor<T>, Closeable by actor {
     private val dataHolder: DataHolder<T> = DataHolder(t)
@@ -130,6 +131,7 @@ class DataActor<T : Any>(
         } else {
             afterChange.noCall()
         }
+        onEveryChange?.invoke(dataHolder.plainData())
     }
 
     override fun change(func: suspend T.() -> T): Job {
