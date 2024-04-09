@@ -55,8 +55,7 @@ class TimeHandler<T : TimeTriggerable<T>>(
         afterChangeCom.getValue().getNextTime()?.let { nextTime ->
             job = scope.launch {
                 delayFct(timeGetter.getDelayTime(nextTime, afterChangeCom.name()) ?: return@launch)
-                val got = afterChangeCom.getValue().runTimeEvent(nextTime)
-                afterChangeCom.callBack(got)
+                afterChangeCom.callBack { it.runTimeEvent(nextTime) }
             }
         }
     }
@@ -72,7 +71,7 @@ class TimeHandler<T : TimeTriggerable<T>>(
 
 interface AfterChangeCom<T : Any> {
     fun name(): String
-    fun callBack(t: T)
+    fun callBack(func: suspend (T) -> T)
     fun getValue(): T
 }
 
@@ -106,7 +105,7 @@ interface AfterChange<T : Any> {
 class DataActor<T : Any>(
     t: T,
     val afterChange: AfterChange<T> = AfterChange.noChange(),
-    val onEveryChange:((T)->Unit)? = null,
+    val onEveryChange: ((T) -> Unit)? = null,
     val actor: ActorableInterface = ActorableInterface(t.toString())
 ) : CActor<T>, Closeable by actor {
     private val dataHolder: DataHolder<T> = DataHolder(t)
@@ -115,8 +114,8 @@ class DataActor<T : Any>(
             return dataHolder.name()
         }
 
-        override fun callBack(t: T) {
-            change { t }
+        override fun callBack(t:suspend (T)-> T) {
+            change(t)
         }
 
         override fun getValue(): T {
