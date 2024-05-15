@@ -157,6 +157,13 @@ class DataActor<T : Any>(
         }
     }
 
+    override suspend fun changeAndReceive(func: suspend T.() -> T): T {
+        return actor.receiveAnswer {
+            doChange(func)
+            dataHolder.plainData()
+        }
+    }
+
     override fun plainData(): T = dataHolder.plainData()
 
     override suspend fun getData(): T {
@@ -168,6 +175,7 @@ class DataActor<T : Any>(
 
 interface CActor<T : Any> {
     fun change(func: suspend T.() -> T): Job
+    suspend fun changeAndReceive(func: suspend T.() -> T): T
     suspend fun suspendChange(func: suspend T.() -> T)
     suspend fun getData(): T
     fun plainData(): T

@@ -19,6 +19,19 @@ class DataActorTest {
     }
 
     @Test
+    fun testChangeAndReceive() = runTest {
+        val myDataActor = DataActor(StateX(9, "Hello"))
+        val got = myDataActor.changeAndReceive { copy(x = 5) }
+        assertEquals(myDataActor.getData(), got)
+        assertEquals(myDataActor.getData(), StateX(5, "Hello"))
+        assertEquals(got, StateX(5, "Hello"))
+        val got2 = myDataActor.changeAndReceive { copy(x = 2,"World" ) }
+        assertEquals(myDataActor.getData(), got2)
+        assertEquals(myDataActor.getData(), StateX(2, "World"))
+        assertEquals(got2, StateX(2, "World"))
+    }
+
+    @Test
     fun testDelay() = runTest {
         val timeGetter = object : TimeGetter {
             override fun currentTime(): Long {
