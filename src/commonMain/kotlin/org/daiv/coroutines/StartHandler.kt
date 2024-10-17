@@ -2,16 +2,17 @@ package org.daiv.coroutines
 
 import mu.KotlinLogging
 
+@Deprecated("use StartManager instead", replaceWith = ReplaceWith("StartManager"))
 class StartHandler {
     companion object {
         private val logger = KotlinLogging.logger { }
     }
 
-    private val actor = ActorableInterface("BenderCP")
-    private val waiter = mutableListOf<AnswerMeterSerial>()
+    private val actor = ActorableInterface("StartHandler")
+    private val waiter = mutableListOf<AnswerOnStart>()
     private var isInit: Boolean = false
 
-    private inner class AnswerMeterSerial(private val action: suspend () -> Unit) : ActorRunnable {
+    private inner class AnswerOnStart(private val action: suspend () -> Unit) : ActorRunnable {
         suspend fun send() {
             action()
         }
@@ -38,6 +39,6 @@ class StartHandler {
     }
 
     fun runAction(action: suspend () -> Unit) {
-        actor.runEvent(AnswerMeterSerial(action))
+        actor.runEvent(AnswerOnStart(action))
     }
 }
